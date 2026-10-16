@@ -1578,47 +1578,20 @@ class ZedVpnService : VpnService() {
                 if (!c.start()) { onReady(-1) }
             }
             VpnManager.KIND_TOR -> {
-                val torBootstrapped = java.util.concurrent.atomic.AtomicBoolean(false)
                 val bridged = java.util.concurrent.atomic.AtomicBoolean(false)
                 val c = dev.cluvex.zedsecure.core.tor.TorController(
                     context = this,
                     settings = settings,
                     onBootstrapped = {
-                        if (torBootstrapped.compareAndSet(false, true)) {
-                            LogBus.append("I/Tor bootstrapped; launching Psiphon over Tor...")
-                            val torPort = dev.cluvex.zedsecure.core.tor.TorConfigBuilder.SOCKS_PORT
-                            val dataDir = java.io.File(filesDir, "psiphon").apply { mkdirs() }
-                            val baseConfig = dev.cluvex.zedsecure.domain.config.PsiphonConfigBuilder.build(
-                                profile = dev.cluvex.zedsecure.domain.config.PsiphonProfile(),
-                                dataDirPath = dataDir.absolutePath,
-                                socksPort = LocalPorts.PSIPHON_SOCKS,
-                                httpPort = LocalPorts.PSIPHON_HTTP,
-                            )
-                            val psiphonConfig = dev.cluvex.zedsecure.domain.config.PsiphonConfigBuilder.withUpstreamProxy(baseConfig, torPort)
-                            val psi = PsiphonController(
-                                service = this@ZedVpnService,
-                                configJson = psiphonConfig,
-                                onSocksPort = { },
-                                onEstablished = {
-                                    if (bridged.compareAndSet(false, true) &&
-                                        bridge(descriptor, LocalPorts.PSIPHON_SOCKS, tunMtu)
-                                    ) {
-                                        VpnManager.activeSocksPort = LocalPorts.PSIPHON_SOCKS
-                                        finishConnected()
-                                    }
-                                },
-                                onStopped = { reason -> onTunnelFailed(reason) },
-                            )
-                            psiphon = psi
-                            if (!psi.start()) stopEverything()
+                        if (bridged.compareAndSet(false, true)) {
+                            onReady(dev.cluvex.zedsecure.core.tor.TorConfigBuilder.SOCKS_PORT)
                         }
                     },
                     onProgress = { pct -> LogBus.append("I/Tor bootstrap $pct%") },
                     onStopped = { reason -> onTunnelFailed(reason) },
-                    upstreamSocksPort = carrierPort,
                 )
-                tor = c
-                if (!c.start()) stopEverything() else armTorBootstrapDeadline(torBootstrapped)
+                outerTor = c
+                if (!c.start()) onReady(-1) else armTorBootstrapDeadline(bridged)
             }
             VpnManager.KIND_SSH -> {
                 val p = runCatching {
