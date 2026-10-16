@@ -1092,7 +1092,7 @@ class ZedVpnService : VpnService() {
                 val (down, up) = when (kind) {
                     VpnManager.KIND_XRAY, VpnManager.KIND_SNISPOOF -> XrayController.readTrafficDelta()
 
-                    VpnManager.KIND_PSIPHON -> uidTrafficDelta()
+                    VpnManager.KIND_PSIPHON, VpnManager.KIND_TOR -> uidTrafficDelta()
                     VpnManager.KIND_OPENCONNECT -> { openConnect?.pokeStats(); openConnect?.trafficDelta() ?: (0L to 0L) }
 
                     VpnManager.KIND_SINGBOX -> singBox?.let { engine ->
