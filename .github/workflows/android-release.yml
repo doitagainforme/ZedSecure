@@ -55,8 +55,8 @@ jobs:
           echo "Using default debug keystore for custom build"
           rm -f keystore.properties release.keystore
 
-      - name: Build
-        run: ./gradlew --warning-mode all :app:assembleRelease
+      - name: Build Debug APK
+        run: ./gradlew --warning-mode all :app:assembleDebug
 
       - name: Name them for people
         run: |
@@ -64,7 +64,7 @@ jobs:
           mkdir -p dist
           V='${{ steps.v.outputs.name }}'
           for abi in arm64-v8a armeabi-v7a x86_64; do
-            src="app/build/outputs/apk/release/app-$abi-release.apk"
+            src="app/build/outputs/apk/debug/app-$abi-debug.apk"
             [ -f "$src" ] || { echo "::error::$src was not built"; exit 1; }
             cp "$src" "dist/ZedSecure-$V-$abi.apk"
           done
