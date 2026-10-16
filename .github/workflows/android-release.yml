@@ -51,9 +51,9 @@ jobs:
           find app/src/main/jniLibs -name '*.so' | sort
 
       - name: Unlock signing
-            run: |
-              echo "Using default debug keystore for custom build"
-              rm -f keystore.properties release.keystore
+        run: |
+          echo "Using default debug keystore for custom build"
+          rm -f keystore.properties release.keystore
 
       - name: Build
         run: ./gradlew --warning-mode all :app:assembleRelease
