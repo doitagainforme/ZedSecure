@@ -38,7 +38,6 @@ class ZedVpnService : VpnService() {
     private val notifications by lazy { VpnNotifications(this) }
 
     private var stage: VpnNotifications.Stage = VpnNotifications.Stage.Preparing
-
     private var connectWhen: Long = 0L
 
     private var showSpeed: Boolean = true
@@ -71,7 +70,6 @@ class ZedVpnService : VpnService() {
 
     @Volatile private var userStop = false
     private var killSwitchEnabled = false
-
     private var killSwitchActive = false
 
     @Volatile private var reconnecting = false
@@ -82,7 +80,6 @@ class ZedVpnService : VpnService() {
     private var retryDelayMs = RETRY_FIRST_MS
 
     private var connected = false
-
     private var proxyOnly = false
 
     private var autoSelectSession = false
@@ -107,7 +104,6 @@ class ZedVpnService : VpnService() {
     override fun onCreate() {
         super.onCreate()
         notifications.createChannel()
-
         XrayController.warmUp(this)
         XrayController.onCoreShutdown = { onTunnelFailed(null) }
     }
@@ -132,7 +128,6 @@ class ZedVpnService : VpnService() {
             command == VpnManager.CMD_START -> {
                 val config = intent.getStringExtra(VpnManager.EXTRA_CONFIG)
                     ?: intent.getStringExtra(VpnManager.EXTRA_CONFIG_PATH)?.let { path ->
-
                         runCatching { java.io.File(path).let { f -> f.readText().also { f.delete() } } }
                             .getOrNull()
                     }
@@ -155,11 +150,8 @@ class ZedVpnService : VpnService() {
                 scope.launch { startTunnel(config, socksPort, kind) }
             }
             command == VpnManager.CMD_STOP -> { userStop = true; stopEverything() }
-
             command == VpnManager.CMD_START_ACTIVE -> startActiveProfile(allowProxyOnly = true)
-
             intent?.action == VpnService.SERVICE_INTERFACE -> startActiveProfile(allowProxyOnly = false)
-
             intent == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && isAlwaysOn ->
                 startActiveProfile(allowProxyOnly = false)
             else -> stopEverything()
@@ -225,7 +217,6 @@ class ZedVpnService : VpnService() {
         }
 
         if (kind == VpnManager.KIND_OPENCONNECT) { startOpenConnect(configJson, settings); return }
-
         if (kind == VpnManager.KIND_SINGBOX) { startSingBox(configJson, settings); return }
 
         val dnsInChain = kind == VpnManager.KIND_DNS_TUNNEL || kind == VpnManager.KIND_MASTERDNS ||
@@ -234,7 +225,6 @@ class ZedVpnService : VpnService() {
         else settings.vpnMtu.coerceIn(1000, 9000)
 
         val bypassLan = shouldBypassLan(settings, configJson, kind)
-
         val spoofBypassIp =
             if (kind == VpnManager.KIND_SNISPOOF) sniSpoofEdgeIp(configJson) else null
 
@@ -243,7 +233,6 @@ class ZedVpnService : VpnService() {
             Builder().apply {
                 setSession(remark.ifBlank { "ZedSecure" })
                 setMtu(tunMtu)
-
                 addAddress(iface.ipv4Router, 30)
                 if (settings.enableIpv6) addAddress(iface.ipv6Router, 126)
                 addLanAwareRoutes(bypassLan, settings.enableIpv6, excludeIp = spoofBypassIp)
@@ -443,9 +432,7 @@ class ZedVpnService : VpnService() {
                 }
             },
             onProgress = { pct -> LogBus.append("I/Tor bootstrap $pct%") },
-            onStopped = { reason ->
-                onTunnelFailed(reason)
-            },
+            onStopped = { reason -> onTunnelFailed(reason) },
         )
         tor = controller
         if (!controller.start()) stopEverything() else armTorBootstrapDeadline(bridged)
@@ -511,7 +498,6 @@ class ZedVpnService : VpnService() {
                 VpnManager.onError(engineFailed(R.string.engine_failed_ssh_over_dns, sshController.lastError))
                 stopEverything(); return
             }
-            Log.i(TAG, "DNS+SSH: SSH SOCKS on $sshPort (via DNS tunnel $port)")
             sshPort
         } else {
             port
@@ -612,9 +598,7 @@ class ZedVpnService : VpnService() {
             profile = profile,
             filesDir = filesDir,
             onLog = { level, msg -> Log.println(if (level <= 0) Log.ERROR else Log.INFO, TAG, msg) },
-
             configureBuilder = { b -> b.applyAppRules(appSettings, selfInTunnel = true) },
-
             fallbackDns = appSettings.vpnDns.split(',', ' ').map { it.trim() }.filter { it.isNotEmpty() },
             onUp = { finishConnected() },
             onDown = { reason -> onTunnelFailed(reason) },
@@ -660,11 +644,9 @@ class ZedVpnService : VpnService() {
 
     private fun coreStartError(): String {
         val raw = XrayController.lastError ?: return getString(R.string.core_start_failed)
-
         Regex("failed to (?:check|load) code ([^ ]+) from ([^ :]+)").find(raw)?.let { m ->
             return getString(R.string.core_geo_code_missing, m.groupValues[1], m.groupValues[2])
         }
-
         Regex("failed to open (geoip[^ :]*\\.dat|geosite[^ :]*\\.dat)").find(raw)?.let { m ->
             return getString(R.string.core_geo_file_missing, m.groupValues[1])
         }
@@ -699,7 +681,6 @@ class ZedVpnService : VpnService() {
             return
         }
         onXrayStarted()
-
         if (!bridge(descriptor, socksPort, tunMtu, pipeline = true)) return
         VpnManager.activeSocksPort = socksPort
         finishConnected()
@@ -708,7 +689,6 @@ class ZedVpnService : VpnService() {
     private fun onXrayStarted() {
         autoSelectSession = AutoSelect.activate()
         if (!autoSelectSession) return
-        LogBus.append("I/Auto-select: started over ${AutoSelect.session.value?.memberProfiles?.size ?: 0} servers")
         watchNetworkChanges()
     }
 
@@ -741,13 +721,10 @@ class ZedVpnService : VpnService() {
             override fun onAvailable(network: android.net.Network) {
                 val previous = current
                 current = network
-
                 if (previous == null || previous == network) return
                 pending?.cancel()
-
                 pending = scope.launch {
                     delay(NETWORK_SETTLE_MS)
-                    LogBus.append("I/Auto-select: network changed, re-measuring every server")
                     AutoSelect.networkChanged()
                 }
             }
@@ -779,9 +756,7 @@ class ZedVpnService : VpnService() {
                     finishConnected()
                 }
             },
-            onStopped = { reason ->
-                onTunnelFailed(reason)
-            },
+            onStopped = { reason -> onTunnelFailed(reason) },
         )
         psiphon = controller
         if (!controller.start()) stopEverything()
@@ -826,11 +801,8 @@ class ZedVpnService : VpnService() {
                 rwTimeout = hevRwTimeout,
             )
             if (onZepTun) {
-                LogBus.append("I/tun zeptun ${ZepTunCore.version} carrying the tunnel")
                 true
             } else {
-                Log.w(TAG, "zeptun did not start; falling back to hev")
-                LogBus.append("W/tun zeptun did not start, falling back to hev")
                 startHev()
             }
         } else {
@@ -841,8 +813,6 @@ class ZedVpnService : VpnService() {
             scope.launch {
                 kotlinx.coroutines.delay(ZEPTUN_PROOF_MS)
                 if (!ZepTunCore.carryingTraffic()) {
-                    LogBus.append("W/tun zeptun carried nothing (${ZepTunCore.stats()}), switching to hev")
-                    Log.w(TAG, "zeptun carried nothing (${ZepTunCore.stats()}); switching to hev")
                     ZepTunCore.stop()
                     if (!startHev()) {
                         VpnManager.onError(getString(R.string.engine_failed_tunnel))
@@ -887,7 +857,6 @@ class ZedVpnService : VpnService() {
         VpnManager.KIND_SINGBOX -> "sing-box"
         VpnManager.KIND_IKEV2 -> "IKEv2"
         VpnManager.KIND_SNISPOOF -> "Xray · SNI"
-
         VpnManager.KIND_CROSS_CHAIN ->
             "${engineLabel(crossInnerKind)} → ${engineLabel(crossOuterKind)}"
         else -> if (proxyOnly) "Xray · Proxy" else "Xray"
@@ -904,7 +873,6 @@ class ZedVpnService : VpnService() {
 
     private fun finishConnected() {
         connected = true
-        if (reconnecting) LogBus.append("I/Kill switch: reconnected; traffic flows through the VPN again")
         reconnecting = false
         stopHoldWatch()
         retryDelayMs = RETRY_FIRST_MS
@@ -962,7 +930,6 @@ class ZedVpnService : VpnService() {
             plan.socksPort == (VpnManager.activeSocksPort ?: plan.socksPort)
         if (!sameSession) {
             builtNetworkType = type
-            LogBus.append("W/Routing: the network is now $type; reconnect to use the rules for it")
             return
         }
         swappingCore = true
@@ -973,7 +940,6 @@ class ZedVpnService : VpnService() {
         }
         if (started) {
             builtNetworkType = type
-            LogBus.append("I/Routing: the network is now $type; the rules for it are in use")
         } else {
             VpnManager.onError(coreStartError())
             stopEverything()
@@ -982,27 +948,19 @@ class ZedVpnService : VpnService() {
 
     private fun reloadForGeoFiles() {
         if (!connected || kind != VpnManager.KIND_XRAY) return
-        if (autoSelectSession) {
-            LogBus.append("I/Routing: geo files arrived; reconnect to use the rules that need them")
-            return
-        }
+        if (autoSelectSession) return
         val plan = StartPlanner(this).planActive(allowProxyOnly = proxyOnly)
         val sameSession = plan is StartPlanner.Plan.Start && plan.kind == VpnManager.KIND_XRAY &&
             plan.proxyOnly == proxyOnly && plan.remark == remark &&
             plan.socksPort == (VpnManager.activeSocksPort ?: plan.socksPort)
-        if (!sameSession) {
-            LogBus.append("I/Routing: geo files arrived; reconnect to use the rules that need them")
-            return
-        }
+        if (!sameSession) return
         swappingCore = true
         val started = try {
             XrayController.start((plan as StartPlanner.Plan.Start).configJson)
         } finally {
             swappingCore = false
         }
-        if (started) {
-            LogBus.append("I/Routing: geo files loaded; every routing rule is in use now")
-        } else {
+        if (!started) {
             VpnManager.onError(coreStartError())
             stopEverything()
         }
@@ -1071,7 +1029,6 @@ class ZedVpnService : VpnService() {
                     VpnManager.KIND_SSH -> ssh?.isRunning == true
                     VpnManager.KIND_OPENCONNECT -> openConnect?.isRunning == true
                     VpnManager.KIND_SINGBOX -> singBox?.isRunning == true
-
                     VpnManager.KIND_CROSS_CHAIN ->
                         engineAlive(crossInnerKind, outer = false) && engineAlive(crossOuterKind, outer = true)
                     else -> swappingCore || XrayController.isRunning
@@ -1091,10 +1048,8 @@ class ZedVpnService : VpnService() {
 
                 val (down, up) = when (kind) {
                     VpnManager.KIND_XRAY, VpnManager.KIND_SNISPOOF -> XrayController.readTrafficDelta()
-
-                    VpnManager.KIND_PSIPHON, VpnManager.KIND_TOR -> uidTrafficDelta()
+                    VpnManager.KIND_PSIPHON -> uidTrafficDelta()
                     VpnManager.KIND_OPENCONNECT -> { openConnect?.pokeStats(); openConnect?.trafficDelta() ?: (0L to 0L) }
-
                     VpnManager.KIND_SINGBOX -> singBox?.let { engine ->
                         val down = (engine.downlinkTotal - singBoxLastDown).coerceAtLeast(0)
                         val up = (engine.uplinkTotal - singBoxLastUp).coerceAtLeast(0)
@@ -1102,12 +1057,10 @@ class ZedVpnService : VpnService() {
                         singBoxLastUp = engine.uplinkTotal
                         down to up
                     } ?: (0L to 0L)
-
                     else -> when (crossInnerKind) {
-                        VpnManager.KIND_PSIPHON -> uidTrafficDelta()
+                        VpnManager.KIND_PSIPHON, VpnManager.KIND_TOR -> uidTrafficDelta()
                         VpnManager.KIND_DNS_TUNNEL, VpnManager.KIND_MASTERDNS,
-                        VpnManager.KIND_TOR, VpnManager.KIND_SSH ->
-                            socksShim?.readDelta() ?: (0L to 0L)
+                        VpnManager.KIND_SSH -> socksShim?.readDelta() ?: (0L to 0L)
                         else -> XrayController.readTrafficDelta()
                     }
                 }
@@ -1154,7 +1107,6 @@ class ZedVpnService : VpnService() {
 
     private fun sniSpoofEdgeIp(configJson: String): String? = sniSpoofEdgeIpOrNull(configJson).also {
         if (it == null) Log.w(TAG, "SNI-spoof: could not resolve the edge IP; it will NOT be excluded")
-        else Log.i(TAG, "SNI-spoof edge resolved to $it")
     }
 
     private fun sniSpoofEdgeIpOrNull(configJson: String): String? = runCatching {
@@ -1178,7 +1130,6 @@ class ZedVpnService : VpnService() {
                 true
             }.getOrDefault(false)
             if (excluded) {
-                Log.i(TAG, "excludeRoute: SNI-spoof edge $excludeIp kept off the tunnel")
                 if (bypassLan) {
                     LAN_BYPASS_ROUTES.forEach { cidr ->
                         val slash = cidr.indexOf('/')
@@ -1195,7 +1146,6 @@ class ZedVpnService : VpnService() {
         if (!bypassLan && excludeIp != null) {
             val split = RouteSplit.defaultExcluding(excludeIp)
             if (split.isNotEmpty()) {
-                Log.i(TAG, "routing around SNI-spoof edge $excludeIp (${split.size} routes)")
                 split.forEach { (addr, prefix) -> runCatching { addRoute(addr, prefix) } }
                 if (ipv6) runCatching { addRoute("::", 0) }
                 return
@@ -1235,7 +1185,6 @@ class ZedVpnService : VpnService() {
 
     private fun configRoutesPrivateDirect(configJson: String): Boolean = runCatching {
         val root = JSONObject(configJson)
-
         val xray = root.optJSONObject("xray") ?: root
         val rules = xray.optJSONObject("routing")?.optJSONArray("rules") ?: return false
         for (i in 0 until rules.length()) {
@@ -1308,7 +1257,6 @@ class ZedVpnService : VpnService() {
         connected = false
         connectWhen = 0L
         crossInnerKind = null
-
         lastUidRx = -1L
         lastUidTx = -1L
     }
@@ -1349,7 +1297,6 @@ class ZedVpnService : VpnService() {
         scope.launch {
             kotlinx.coroutines.delay(TOR_BOOTSTRAP_TIMEOUT_MS)
             if (!bridged.get() && VpnManager.status.value.state.isTransitioning) {
-                LogBus.append("E/Tor bootstrap timed out after ${TOR_BOOTSTRAP_TIMEOUT_MS / 1000}s")
                 onTunnelFailed(getString(R.string.tor_bootstrap_timeout))
             }
         }
@@ -1364,14 +1311,10 @@ class ZedVpnService : VpnService() {
                 .addAddress("10.111.222.1", 32)
                 .addRoute("0.0.0.0", 0)
                 .addRoute("::", 0)
-
             runCatching { b.addDisallowedApplication(packageName) }
             tun = b.establish()
             tun != null
-        }.getOrElse {
-            Log.w(TAG, "kill-switch tun failed", it)
-            false
-        }
+        }.getOrElse { false }
     }
 
     private fun onTunnelFailed(reason: String?) {
@@ -1417,16 +1360,13 @@ class ZedVpnService : VpnService() {
             .build()
         val callback = object : android.net.ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: android.net.Network) {
-                val fresh = holdNetworks.add(network)
-                if (fresh) networkCameBack()
+                if (holdNetworks.add(network)) networkCameBack()
             }
-
             override fun onCapabilitiesChanged(network: android.net.Network, caps: android.net.NetworkCapabilities) {
                 if (caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED) && holdNetworks.add(network)) {
                     networkCameBack()
                 }
             }
-
             override fun onLost(network: android.net.Network) {
                 holdNetworks.remove(network)
             }
@@ -1434,7 +1374,7 @@ class ZedVpnService : VpnService() {
         holdNetworks.clear()
         runCatching { cm.registerNetworkCallback(request, callback) }
             .onSuccess { holdWatch = callback }
-            .onFailure { Log.w(TAG, "kill-switch network watch unavailable", it) }
+            .onFailure { Log.w(TAG, "network watch unavailable", it) }
     }
 
     private fun networkCameBack() {
@@ -1463,11 +1403,7 @@ class ZedVpnService : VpnService() {
 
     private fun retryFromHold() {
         if (userStop || !killSwitchActive || reconnecting) return
-        if (holdWatch != null && holdNetworks.isEmpty()) {
-            LogBus.append("I/Kill switch: no network yet; reconnecting once one is back")
-            return
-        }
-        LogBus.append("I/Kill switch: reconnecting")
+        if (holdWatch != null && holdNetworks.isEmpty()) return
         reconnecting = true
         stage = VpnNotifications.Stage.Preparing
         runCatching { notify(connectingNotification()) }
@@ -1568,7 +1504,6 @@ class ZedVpnService : VpnService() {
                     service = this,
                     configJson = config,
                     onSocksPort = { },
-
                     onEstablished = {
                         if (bridged.compareAndSet(false, true)) onReady(LocalPorts.PSIPHON_SOCKS)
                     },
@@ -1629,7 +1564,6 @@ class ZedVpnService : VpnService() {
                     onReady(c.start())
                 }
             }
-
             else -> {
                 if (!XrayController.start(config)) {
                     VpnManager.onError(coreStartError())
@@ -1777,7 +1711,6 @@ class ZedVpnService : VpnService() {
                 psiphon = c
                 if (!c.start()) stopEverything()
             }
-
             else -> {
                 val patched = runCatching {
                     dev.cluvex.zedsecure.domain.config.XrayJsonBuilder
@@ -1808,23 +1741,15 @@ class ZedVpnService : VpnService() {
 
     companion object {
         private const val TAG = "ZedVpnService"
-
         private const val ZEPTUN_PROOF_MS = 6_000L
-
         private const val NETWORK_SETTLE_MS = 1_500L
         private const val RETRY_FIRST_MS = 3_000L
         private const val RETRY_MAX_MS = 60_000L
-
         private const val SHIM_PORT = LocalPorts.SHIM
-
         private const val MASTERDNS_IDLE_TIMEOUT_MS = 90_000L
-
         private const val MASTERDNS_MAX_WAIT_MS = 300_000L
-
         private const val TOR_BOOTSTRAP_TIMEOUT_MS = 120_000L
-
         private const val SNISPOOF_PORT = LocalPorts.SNI_SPOOF
-        private const val MTU = 1500
 
         private val LAN_BYPASS_ROUTES = listOf(
             "0.0.0.0/5", "8.0.0.0/7", "11.0.0.0/8", "12.0.0.0/6", "16.0.0.0/4",
