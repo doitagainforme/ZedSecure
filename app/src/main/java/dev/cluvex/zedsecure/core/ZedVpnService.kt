@@ -1655,8 +1655,10 @@ class ZedVpnService : VpnService() {
                             LogBus.append("I/Tor bootstrapped; launching Psiphon over Tor...")
                             val torPort = dev.cluvex.zedsecure.core.tor.TorConfigBuilder.SOCKS_PORT
                             val dataDir = java.io.File(filesDir, "psiphon").apply { mkdirs() }
+                            val countryFromRemark = Regex("\\[([A-Za-z]{2})\\]").find(remark)?.groupValues?.get(1)?.uppercase() ?: "NL"
+                            LogBus.append("I/Psiphon: selected egress country: $countryFromRemark")
                             val baseConfig = dev.cluvex.zedsecure.domain.config.PsiphonConfigBuilder.build(
-                                profile = dev.cluvex.zedsecure.domain.config.PsiphonProfile(),
+                                profile = dev.cluvex.zedsecure.domain.config.PsiphonProfile(country = countryFromRemark),
                                 dataDirPath = dataDir.absolutePath,
                                 socksPort = LocalPorts.PSIPHON_SOCKS,
                                 httpPort = LocalPorts.PSIPHON_HTTP,
